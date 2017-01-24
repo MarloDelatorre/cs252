@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <pthread.h>
+#include <assert.h>
 #include "MyMalloc.h"
 
 static pthread_mutex_t mutex;
@@ -104,18 +105,44 @@ void * allocateObject(size_t size)
      * multiple of 8 bytes for alignment.
      */
     size_t roundedSize = (size + sizeof(ObjectHeader) + 7) & ~7;
+    
+    // fl_search will traverse the freelist and return a pointer to the first
+    // header which has enough memory for roundedSize; return NULL if we don't find
+    // a header with sufficient memory.
+    ObjectHeader * memChunk = fl_search(roundedSize);
 
-    // Naively get memory from the OS every time
-    void *_mem = getMemoryFromOS(arenaSize); 
+    // If it turns out that fl_search could not find a sufficient header, we call
+    // fl_insert which will add a block to the beginning of the freelist and return
+    // a pointer to it.
+    if (memChunk == NULL) {
+      memChunk = fl_insert();
+    }
+    
+    assert(memChunk != NULL);
 
-    // Store the size in the header
-    ObjectHeader *o = (ObjectHeader *)_mem;
-    o->_objectSize = roundedSize;
+    // We have now guaranteed that memChunk points to a header with memory that is 
+    // greater or equal to roundedSize. Now we should check if we should split the chunk 
+    // of memory or not. (i.e. after splitting do we have enough space for a header 
+    // + 8 bytes?)
+    ObjectHeader * _mem = NULL;
+    if (memChunk->_objectSize - roundedSize >= sizeof(ObjectHeader) + 8) {
+      // We have enough space for another memory chunk, split the block 
+      _mem = split_chunk(memChunk, roundedSize); 
+    } else {
+      // We didn't have enough space for another memory chunk, don't split the block
+      _mem = memChunk;
+      fl_remove(memChunk);
+    }
+
+    assert(_mem != NULL);
+
+    // _mem now contains a pointer to the header of the memory we want to allocated,
+    // we have asserted that it does not point to NULL
 
     pthread_mutex_unlock(&mutex);
 
     // Return a pointer to useable memory
-    return (void *)((char *)o + sizeof(ObjectHeader));
+    return (void *)(_mem + sizeof(ObjectHeader));
 }
 
 /* 
@@ -265,3 +292,56 @@ extern void * calloc(size_t nelem, size_t elsize)
     return ptr;
 }
 
+// Auxilary functions for allocateObject(..)
+
+//TODO; test this function
+ObjectHeader * fl_search(size_t size) {
+  ObjectHeader * curr = _freeList->_listNext;
+  while (curr != &_freeListSentinel) {
+    if (curr->_objectSize >= size) {
+      return curr;
+    }
+  }
+  return NULL;
+}
+
+// TODO: test this function
+ObjectHeader * fl_insert() {
+  // Get memory from OS
+  void *_mem = getMemoryFromOS(arenaSize);
+
+  // Write fenceposts
+  ObjectHeader * fencePostHead = (ObjectHeader *)_mem;
+  fencePostHead->_allocated = 1;
+  fencePostHead->_objectSize = 0;
+
+  char * temp = (char *)_mem + arenaSize - sizeof(ObjectHeader);
+  ObjectHeader * fencePostTail = (ObjectHeader *)temp;
+  fencePostTail->_allocated = 1;
+  fencePostTail->_objectSize = 0;
+
+  // Write header
+  temp = (char *)_mem + sizeof(ObjectHeader);
+  ObjectHeader *currentHeader = (ObjectHeader *)temp;
+  currentHeader->_objectSize = arenaSize - (2*sizeof(ObjectHeader));
+  currentHeader->_leftObjectSize = 0;
+  currentHeader->_allocated = 0;
+  
+  // Insert into beginning of freelist
+  currentHeader->_listNext = _freeList->_listNext;
+  currentHeader->_listPrev = _freeList;
+  _freeList->_listNext = currentHeader;
+  
+  return currentHeader;
+}
+
+// TODO: write and test this function
+ObjectHeader * split_chunk(ObjectHeader * chunk, size_t size) {
+  return NULL;
+}
+
+//TODO: test this function
+void fl_remove(ObjectHeader * chunk) {
+  chunk->_listPrev->_listNext = chunk->_listNext;
+  chunk->_listNext->_listPrev = chunk->_listPrev;
+}

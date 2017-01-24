@@ -53,3 +53,17 @@ void print();         // Prints the current information about the allocator
 void print_list();    // Prints the current state of the free list
 
 void * getMemoryFromOS(size_t size); // Gets memory from the OS
+
+// Auxilary functions for allocateObject(..)
+
+// Traverses the freelist to return a pointer to a header that contains sufficient size, returns null otherwise
+ObjectHeader * fl_search(size_t size);
+
+// Requests 2mb memory from the OS, sets up fenceposts and initial header, and returns a pointer to the initial header. As a side effect, it inserts that header to the beginning of the freelist
+ObjectHeader * fl_insert();
+
+// Splits a chunk of memory. Establishes a new header to the right of chunk, updates its and chunk's fields, and returns a pointer to the new header.
+ObjectHeader * split_chunk(ObjectHeader * chunk, size_t size);
+
+// Removes an ObjectHeader from the freelist
+void fl_remove(ObjectHeader * chunk);
