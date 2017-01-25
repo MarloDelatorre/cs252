@@ -88,10 +88,6 @@ void initialize()
 }
 
 /* 
- * TODO: In allocateObject you will handle retrieving new memory for the malloc
- * request. The current implementation simply pulls from the OS for every
- * request.
- *
  * @param: amount of memory requested
  * @return: pointer to start of useable memory
  */
@@ -115,7 +111,7 @@ void * allocateObject(size_t size)
     // fl_insert which will add a block to the beginning of the freelist and return
     // a pointer to it.
     if (memChunk == NULL) {
-      memChunk = fl_insert();
+      memChunk = fl_create();
     }
     
     assert(memChunk != NULL);
@@ -130,31 +126,65 @@ void * allocateObject(size_t size)
       _mem = split_chunk(memChunk, roundedSize); 
     } else {
       // We didn't have enough space for another memory chunk, don't split the block
+      // Remove the chunk from the freelist
       _mem = memChunk;
       fl_remove(memChunk);
     }
 
     assert(_mem != NULL);
-
+    
+    _mem->_allocated = 1;
     // _mem now contains a pointer to the header of the memory we want to allocated,
     // we have asserted that it does not point to NULL
 
     pthread_mutex_unlock(&mutex);
 
     // Return a pointer to useable memory
-    return (void *)(_mem + sizeof(ObjectHeader));
+    return (void *)((char *)_mem + sizeof(ObjectHeader));
 }
 
 /* 
- * TODO: In freeObject you will implement returning memory back to the free
- * list, and coalescing the block with surrounding free blocks if possible.
- *
  * @param: pointer to the beginning of the block to be returned
  * Note: ptr points to beginning of useable memory, not the block's header
  */
 void freeObject(void *ptr)
 {
-    // Add your implementation here
+    ObjectHeader * centerHeader = (ObjectHeader *)((char *)ptr - sizeof(ObjectHeader));
+    centerHeader->_allocated = 0;
+
+    // Check if right header is alloc'd, if so absorb it into center
+    ObjectHeader * rightHeader = (ObjectHeader *)((char *)centerHeader + centerHeader->_objectSize);
+    
+    if (!rightHeader->_allocated) {
+      // Remove rightHeader from freelist
+      fl_remove(rightHeader);
+
+      // Update centerHeader's fields
+      centerHeader->_objectSize += rightHeader->_objectSize;
+      
+      // Update header right of the rightHeader (if it's not a dummy)
+      ObjectHeader * farRightHeader = (ObjectHeader *)((char*)rightHeader + rightHeader->_objectSize);
+      if (farRightHeader->_objectSize) {
+        farRightHeader->_leftObjectSize = centerHeader->_objectSize;
+      }
+    }
+
+    // Check if left header is alloc'd, if so absorb center into left
+    ObjectHeader * leftHeader = (ObjectHeader *)((char *)centerHeader - centerHeader->_leftObjectSize);
+    if (!leftHeader->_allocated) {
+      // Update leftHeader's fields
+      leftHeader->_objectSize += centerHeader->_objectSize;
+
+      // Update header right of leftHeader (if it's not a dummy)
+      ObjectHeader * farRightHeader = (ObjectHeader *)((char *)centerHeader + centerHeader->_objectSize);
+      if (farRightHeader->_objectSize) {
+        farRightHeader->_leftObjectSize = leftHeader->_objectSize;
+      }
+    }
+    // Otherwise, insert center into freelist
+    else {
+      fl_insert(centerHeader);
+    }
     return;
 }
 
@@ -293,20 +323,18 @@ extern void * calloc(size_t nelem, size_t elsize)
 }
 
 // Auxilary functions for allocateObject(..)
-
-//TODO; test this function
 ObjectHeader * fl_search(size_t size) {
   ObjectHeader * curr = _freeList->_listNext;
   while (curr != &_freeListSentinel) {
     if (curr->_objectSize >= size) {
       return curr;
     }
+    curr = curr->_listNext;
   }
   return NULL;
 }
 
-// TODO: test this function
-ObjectHeader * fl_insert() {
+ObjectHeader * fl_create() {
   // Get memory from OS
   void *_mem = getMemoryFromOS(arenaSize);
 
@@ -335,13 +363,12 @@ ObjectHeader * fl_insert() {
   return currentHeader;
 }
 
-// TODO: write and test this function
-ObjectHeader * split_chunk(ObjectHeader * chunk, size_t size) {
+ObjectHeader * split_chunk(ObjectHeader * header, size_t size) {
   // Calculate position of next header
-  size_t leftoverMem = chunk->_objectSize - size;
+  size_t leftoverMem = header->_objectSize - size;
 
   // Write fields to new header
-  ObjectHeader * newHeader = chunk + leftoverMem;
+  ObjectHeader * newHeader = (ObjectHeader *)((char *)header + leftoverMem);
   newHeader->_objectSize = size;
   newHeader->_leftObjectSize = leftoverMem;
   newHeader->_allocated = 0;
@@ -349,13 +376,31 @@ ObjectHeader * split_chunk(ObjectHeader * chunk, size_t size) {
   newHeader->_listPrev = NULL;
 
   // Update the header to the left
-  chunk->_objectSize = leftoverMem;
+  header->_objectSize = leftoverMem;
+  
+  // Update the header to the right (if it's not a dummy header)
+  ObjectHeader * rightHeader = (ObjectHeader *)((char *)newHeader + newHeader->_objectSize);
+  if (rightHeader->_objectSize) {
+    rightHeader->_leftObjectSize = newHeader->_objectSize;
+  }
 
   return newHeader;
 }
 
-//TODO: test this function
-void fl_remove(ObjectHeader * chunk) {
-  chunk->_listPrev->_listNext = chunk->_listNext;
-  chunk->_listNext->_listPrev = chunk->_listPrev;
+void fl_remove(ObjectHeader * header) {
+  // Check to see if the chunk is actually in the freelist
+  if (header->_listPrev == NULL || header->_listNext == NULL) {
+    return;
+  }
+  header->_listPrev->_listNext = header->_listNext;
+  header->_listNext->_listPrev = header->_listPrev;
+  header->_listPrev = NULL;
+  header->_listNext = NULL;
+}
+
+void fl_insert(ObjectHeader * header) {
+  _freeList->_listNext->_listPrev = header;
+  header->_listNext = _freeList->_listNext;
+  header->_listPrev = _freeList;
+  _freeList->_listNext = header;
 }
