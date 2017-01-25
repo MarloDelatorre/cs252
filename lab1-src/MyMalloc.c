@@ -344,8 +344,8 @@ ObjectHeader * split_chunk(ObjectHeader * chunk, size_t size) {
   ObjectHeader * newHeader = chunk + leftoverMem;
   newHeader->_objectSize = size;
   newHeader->_leftObjectSize = leftoverMem;
-  newHeader->_allocated = false;
-  newHeader->_listNext = NULL:
+  newHeader->_allocated = 0;
+  newHeader->_listNext = NULL;
   newHeader->_listPrev = NULL;
 
   // Update the header to the left
