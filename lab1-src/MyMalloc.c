@@ -337,7 +337,21 @@ ObjectHeader * fl_insert() {
 
 // TODO: write and test this function
 ObjectHeader * split_chunk(ObjectHeader * chunk, size_t size) {
-  return NULL;
+  // Calculate position of next header
+  size_t leftoverMem = chunk->_objectSize - size;
+
+  // Write fields to new header
+  ObjectHeader * newHeader = chunk + leftoverMem;
+  newHeader->_objectSize = size;
+  newHeader->_leftObjectSize = leftoverMem;
+  newHeader->_allocated = false;
+  newHeader->_listNext = NULL:
+  newHeader->_listPrev = NULL;
+
+  // Update the header to the left
+  chunk->_objectSize = leftoverMem;
+
+  return newHeader;
 }
 
 //TODO: test this function
