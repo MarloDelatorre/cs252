@@ -268,7 +268,6 @@ expr:
     $$ = node;
   }
 |
-  /*
   NUMBER
   {
     struct TREE_NODE * node = (struct TREE_NODE *) malloc(sizeof(struct TREE_NODE));
@@ -276,8 +275,6 @@ expr:
     node -> intValue = $1;
     $$ = node;
   }
-  */
-  const_expr {}
 |
   ID
   {
@@ -306,29 +303,6 @@ expr:
   }
 ;
 
-const_list:
-  const_expr 
-  {
-  }
-|
-  const_list const_expr
-  {
-  }
-;
-
-const_expr:
-  NUMBER
-  {
-  }
-|
-  OPENBRACK CLOSEBRACK
-  {
-  }
-|
-  OPENBRACK const_list CLOSEBRACK
-  {
-  }
-;
 %%
 /********************************************************************************
  * Beginning of Section 4: C functions to be included in the y.tab.c.           *
