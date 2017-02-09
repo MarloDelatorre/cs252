@@ -86,14 +86,6 @@ extern int tracing;
     return CLOSEPAR;
 }
 
-"[" {
-    return OPENBRACK;
-}
-
-"]" {
-    return CLOSEBRACK;
-}
-
 ;.*$  {
     /* Discard comment */
 }

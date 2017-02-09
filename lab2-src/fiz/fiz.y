@@ -16,7 +16,6 @@
 
 // The token NUMBER has a integer value associated with it, here <number_val> refers to the 
 // int number_val member in %union below
-// TODO: need to replace number_val with custom data structure
 %token <number_val> NUMBER 
 
 // These tokens do not have associated values
@@ -24,7 +23,6 @@
 
 // This declares that in the grammar, the non terminals expr, expr_list, and arg_list have 
 // a value "struct TREE_NODE *node_val" associated with it
-// TODO: need to replace number_val with custom data structure
 %type <node_val> expr expr_list arg_list
 
 %union    {
@@ -268,7 +266,6 @@ expr:
     $$ = node;
   }
 |
-  /*
   NUMBER
   {
     struct TREE_NODE * node = (struct TREE_NODE *) malloc(sizeof(struct TREE_NODE));
@@ -276,8 +273,6 @@ expr:
     node -> intValue = $1;
     $$ = node;
   }
-  */
-  const_expr {}
 |
   ID
   {
@@ -306,29 +301,6 @@ expr:
   }
 ;
 
-const_list:
-  const_expr 
-  {
-  }
-|
-  const_list const_expr
-  {
-  }
-;
-
-const_expr:
-  NUMBER
-  {
-  }
-|
-  OPENBRACK CLOSEBRACK
-  {
-  }
-|
-  OPENBRACK const_list CLOSEBRACK
-  {
-  }
-;
 %%
 /********************************************************************************
  * Beginning of Section 4: C functions to be included in the y.tab.c.           *
