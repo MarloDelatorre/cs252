@@ -374,6 +374,28 @@ const_expr:
 /********************************************************************************
  * Beginning of Section 4: C functions to be included in the y.tab.c.           *
  ********************************************************************************/ 
+/* Deep copy a constant expression */
+const_node * deep_copy(const_node *cnode) {
+  const_node * copy = cnode == NULL ? NULL : (const_node *) malloc(sizeof(const_node));
+  const_node * head = copy;
+
+  while (cnode != NULL) {
+    if (cnode->isList) {
+      copy->isList = 1;
+      copy->value.list = deep_copy(cnode->value.list);
+    } else {
+      copy->isList = 0;
+      copy->value.intValue = cnode->value.intValue;
+    }
+
+    copy->next = deep_copy(cnode->next);
+    cnode = cnode->next;
+    copy = copy->next;
+  }
+
+  return head;
+}
+
 /* Print constant expression */
 void print_cnode(const_node *cn) {
   while (cn != NULL) {
@@ -556,7 +578,7 @@ const_node * eval(struct TREE_NODE * node, const_node **env)
  * Begin of supporting code for the built-in functions.  *
  *********************************************************/
 const_node * eval_head(struct TREE_NODE * node, const_node **env) {
-  const_node * cnode = eval(node->builtin_func.args[0], env);
+  const_node * cnode = deep_copy(eval(node->builtin_func.args[0], env));
   if (cnode->isList && cnode->value.list != NULL) {
     cnode = cnode->value.list; 
     cnode->next = NULL;
@@ -569,7 +591,7 @@ const_node * eval_head(struct TREE_NODE * node, const_node **env) {
 }
 
 const_node * eval_tail(struct TREE_NODE * node, const_node **env) {
-  const_node * cnode = eval(node->builtin_func.args[0], env);
+  const_node * cnode = deep_copy(eval(node->builtin_func.args[0], env));
   if (cnode->isList && cnode->value.list != NULL) {
     cnode->value.list = cnode->value.list->next;
   } else {
@@ -581,8 +603,8 @@ const_node * eval_tail(struct TREE_NODE * node, const_node **env) {
 }
 
 const_node * eval_list(struct TREE_NODE * node, const_node **env) {
-  const_node * head = eval(node->builtin_func.args[0], env);
-  const_node * tail = eval(node->builtin_func.args[1], env);
+  const_node * head = deep_copy(eval(node->builtin_func.args[0], env));
+  const_node * tail = deep_copy(eval(node->builtin_func.args[1], env));
 
   // Error when tail is an atomic value
   if (tail->isList) {
@@ -598,25 +620,21 @@ const_node * eval_list(struct TREE_NODE * node, const_node **env) {
 
 const_node * eval_ifn(struct TREE_NODE *node, const_node **env) {
   const_node * cond = eval(node->builtin_func.args[0], env);
-  const_node * expr1 = eval(node->builtin_func.args[1], env);
-  const_node * expr2 = eval(node->builtin_func.args[2], env);
 
   if (cond->isList && cond->value.list == NULL) {
-    return expr1;
+    return eval(node->builtin_func.args[1], env);
   } else {
-    return expr2;
+    return eval(node->builtin_func.args[2], env);
   }
 }
 
 const_node * eval_ifa(struct TREE_NODE *node, const_node **env) {
   const_node * cond = eval(node->builtin_func.args[0], env);
-  const_node * expr1 = eval(node->builtin_func.args[1], env);
-  const_node * expr2 = eval(node->builtin_func.args[2], env);
 
   if (cond->isList) {
-    return expr2;
+    return eval(node->builtin_func.args[1], env);
   } else {
-    return expr1;
+    return eval(node->builtin_func.args[2], env);
   }
 }
 
