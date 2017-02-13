@@ -631,7 +631,7 @@ const_node * eval_ifn(struct TREE_NODE *node, const_node **env) {
 const_node * eval_ifa(struct TREE_NODE *node, const_node **env) {
   const_node * cond = eval(node->builtin_func.args[0], env);
 
-  if (cond->isList) {
+  if (!cond->isList) {
     return eval(node->builtin_func.args[1], env);
   } else {
     return eval(node->builtin_func.args[2], env);
