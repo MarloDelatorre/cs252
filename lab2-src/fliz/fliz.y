@@ -116,8 +116,7 @@ struct TREE_NODE
 struct BUILTIN_DECL {
 	char *name;
 	int numArgs;
-	int (* body)(struct TREE_NODE* node, int *env);		// Body of the function
-	void (* print)(FILE* stream, struct TREE_NODE* node, int *env, int level) ;
+	const_node *(* body)(struct TREE_NODE* node, const_node **env);		// Body of the function
 					// support printing that occurs when tracing is on
 };
 
@@ -152,14 +151,25 @@ struct FUNC_DECL * find_function(char *name);
 void resolve(struct TREE_NODE *node, struct FUNC_DECL *cf);
 
 // Evaluate a function
-const_node * eval(struct TREE_NODE * node, int *env);
+const_node * eval(struct TREE_NODE * node, const_node **env);
 
 // Free a syntax tree that is no longer needed
 void free_tree(struct TREE_NODE *node);
 
+// Built-in functions
+const_node * eval_head(struct TREE_NODE *node, const_node **env);
+const_node * eval_tail(struct TREE_NODE *node, const_node **env);
+const_node * eval_list(struct TREE_NODE *node, const_node **env);
+const_node * eval_ifn(struct TREE_NODE *node, const_node **env);
+const_node * eval_ifa(struct TREE_NODE *node, const_node **env);
+
 // The global variable of all builtin functions
 struct BUILTIN_DECL builtin_functions[NUM_BUILTIN] = {
-
+  {"head", 1, &eval_head},
+  {"tail", 1, &eval_tail}, 
+  {"list", 2, &eval_list},
+  {"ifn", 3, &eval_ifn},
+  {"ifa", 3, &eval_ifa}
 };
 
 %}
@@ -211,6 +221,7 @@ statement:
   {
     resolve($1, NULL);
     if (err_value == 0) {
+        printf(" ");
         print_cnode(eval($1, NULL));
         printf("\n");
     }
@@ -327,7 +338,7 @@ const_list:
 const_expr:
   NUMBER
   {
-    // [ 0 | NULL | intValue]
+    // [ 0 | NULL | intValue ]
     const_node *cnode = (const_node *) malloc(sizeof(const_node));
     cnode->isList = 0;
     cnode->next = NULL;
@@ -338,7 +349,7 @@ const_expr:
 |
   OPENSQB CLOSESQB
   {
-    // [ 1 | NULL | NULL]
+    // [ 1 | NULL | NULL ]
     const_node *cnode = (const_node *) malloc(sizeof(const_node));
     cnode->isList = 1;
     cnode->next = NULL;
@@ -349,8 +360,7 @@ const_expr:
 |
   OPENSQB const_list CLOSESQB
   {
-    // Need to create a const_node that will point to the start of a list
-    // It points to empty list, another list, or number
+    //[ 1 | NULL | list ]
     const_node *cnode = (const_node *) malloc(sizeof(const_node));
     cnode->isList = 1;
     cnode->next = NULL;
@@ -496,26 +506,18 @@ void resolve(struct TREE_NODE *node, struct FUNC_DECL *cf)
     }
 }
 
-/* Evaluates an expression node (temp for list support) */
-const_node * eval(struct TREE_NODE * node, int *env) {
-  return node->constPtr;
-}
-
-/* Commented out as this is for NUMBERS
-int eval(struct TREE_NODE * node, int *env)
+const_node * eval(struct TREE_NODE * node, const_node **env)
 {
     struct FUNC_DECL   *f;
-    int i, v;
-    int e[MAX_ARGUMENTS];
+    int i;
+    const_node *v;
+    const_node *e[MAX_ARGUMENTS];
     depth ++;
 
     switch(node->type)
     {
         case CONST_NODE:
-            print_cnode(node->constPtr);
-            break;
-        case NUMBER_NODE:
-            v = node->intValue;
+            v = node->constPtr;
             break;
         case ARG_INDEX:
             v = env[node->intValue];
@@ -537,30 +539,9 @@ int eval(struct TREE_NODE * node, int *env)
             for (i=0; i<f->numArgs; i++) {
                 e[i] = eval(node->func_eval.args[i], env);
             }
-            
-            if (tracing) {
-                for (i=0; i<depth; i++) {
-                    printf (" ");
-                }
-                printf("Evaluating (%s", f->name); 
-                for (i=0; i<f->numArgs; i++) {
-                    printf (" %d", e[i]);
-                }
-                printf(")\n");
-            }
-            
+           
             v = eval(f->body, e);
             
-            if (tracing) {
-                for (i=0; i<depth; i++) {
-                    printf (" ");
-                }
-                printf("(%s", f->name); 
-                for (i=0; i<f->numArgs; i++) {
-                    printf (" %d", e[i]);
-                }
-                printf(") = %d\n", v);
-            }
             break;
 
         default:
@@ -570,12 +551,75 @@ int eval(struct TREE_NODE * node, int *env)
     depth --;
     return v;
 }
-*/
-
 
 /*********************************************************
  * Begin of supporting code for the built-in functions.  *
  *********************************************************/
+const_node * eval_head(struct TREE_NODE * node, const_node **env) {
+  const_node * cnode = eval(node->builtin_func.args[0], env);
+  if (cnode->isList && cnode->value.list != NULL) {
+    cnode = cnode->value.list; 
+    cnode->next = NULL;
+  } else {
+    fprintf(stderr, "Runtime error: trying to get head from an atomic value\n");
+    exit(0);
+  }
+
+  return cnode;
+}
+
+const_node * eval_tail(struct TREE_NODE * node, const_node **env) {
+  const_node * cnode = eval(node->builtin_func.args[0], env);
+  if (cnode->isList && cnode->value.list != NULL) {
+    cnode->value.list = cnode->value.list->next;
+  } else {
+    fprintf(stderr, "Runtime error: trying to get head from an atomic value\n");
+    exit(0);
+  }
+
+  return cnode;
+}
+
+const_node * eval_list(struct TREE_NODE * node, const_node **env) {
+  const_node * head = eval(node->builtin_func.args[0], env);
+  const_node * tail = eval(node->builtin_func.args[1], env);
+
+  // Error when tail is an atomic value
+  if (tail->isList) {
+    head->next = tail->value.list;
+    tail->value.list = head;
+  } else {
+    fprintf(stderr, "Runtime error: trying to use an atomic value as tail in list\n");
+    exit(1);
+  }
+
+  return tail;
+}
+
+const_node * eval_ifn(struct TREE_NODE *node, const_node **env) {
+  const_node * cond = eval(node->builtin_func.args[0], env);
+  const_node * expr1 = eval(node->builtin_func.args[1], env);
+  const_node * expr2 = eval(node->builtin_func.args[2], env);
+
+  if (cond->isList && cond->value.list == NULL) {
+    return expr1;
+  } else {
+    return expr2;
+  }
+}
+
+const_node * eval_ifa(struct TREE_NODE *node, const_node **env) {
+  const_node * cond = eval(node->builtin_func.args[0], env);
+  const_node * expr1 = eval(node->builtin_func.args[1], env);
+  const_node * expr2 = eval(node->builtin_func.args[2], env);
+
+  if (cond->isList) {
+    return expr2;
+  } else {
+    return expr1;
+  }
+}
+
 
 /*********************************************************
  * End of supporting code for the built-in functions.  *
