@@ -50,8 +50,6 @@ extern int tracing;
 "help" {
     printf ("You can use the following commands:\n");
     printf ("  import <file_name>\n");
-    printf ("  tracing on\n");
-    printf ("  tracing off\n");
     printf ("  (define (<func_name> <<arg_list>>) <<expr>>)\n");
     printf ("  <<expr>>\n");
     printf ("The grammar for <<expr>> is:\n");
@@ -60,14 +58,6 @@ extern int tracing;
     printf ("            |  (ifz <<expr>> <<expr>> <<expr>>)\n");
     printf ("            |  (halt)\n");
     printf ("            |  (<func_name> <<expr_list>>)\n");
-}
-
-"tracing on" {
-    tracing = 1;   /* In tracing mode, execution of the program show function calls */
-}
-
-"tracing off" {
-    tracing = 0;
 }
 
 "halt" {

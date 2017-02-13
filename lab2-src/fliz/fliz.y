@@ -53,7 +53,7 @@ int yylex();
 
 #define MAX_FUNCTIONS 1000
 #define MAX_ARGUMENTS 10
-#define NUM_BUILTIN   3
+#define NUM_BUILTIN   5
 
 // Custom data structure for constant expressions
 typedef struct const_node {
@@ -137,7 +137,6 @@ int numFuncs = 0;
 // Global variables
 int err_value = 0;
 int loading = 0;
-int tracing = 0;
 int depth = 0;
 
 // Print a constrant expression
@@ -158,24 +157,9 @@ const_node * eval(struct TREE_NODE * node, int *env);
 // Free a syntax tree that is no longer needed
 void free_tree(struct TREE_NODE *node);
 
-/*
-int eval_inc(struct TREE_NODE * node, int *env);
-int eval_dec(struct TREE_NODE * node, int *env);
-int eval_ifz(struct TREE_NODE * node, int *env);
-
-// Support printing when tracing is on
-void print_inc(FILE *stream, struct TREE_NODE * node, int *env, int level);
-void print_dec(FILE *stream, struct TREE_NODE * node, int *env, int level);
-void print_ifz(FILE *stream, struct TREE_NODE * node, int *env, int level);
-*/
-
 // The global variable of all builtin functions
 struct BUILTIN_DECL builtin_functions[NUM_BUILTIN] = {
-/*
-    {"inc", 1, &eval_inc, &print_inc},
-	{"dec", 1, &eval_dec, &print_dec},
-	{"ifz", 3, &eval_ifz, &print_ifz}
-*/
+
 };
 
 %}
@@ -436,43 +420,6 @@ void free_tree(struct TREE_NODE * node)
     free(node);
 }
 
-/* Print an expression when tracing is on */
-void print_node(struct TREE_NODE * node, int *env, int level)
-{
-    int i;
-    struct FUNC_DECL *f;
-    switch(node->type)
-    {
-        case NUMBER_NODE:
-            printf (" %d", node->intValue);
-            return;
-        case ARG_INDEX:
-            printf (" %d", env[node->intValue]);
-            return;
-        case BUILTIN_FUNC:
-			node->builtin_func.decl->print(stdout, node, env, level);
-            return;
-        case HALT_NODE:
-            printf (" (halt)");
-            return;
-        case FUNC_EVAL:
-            f = node->func_eval.func;
-            printf (" (%s", f->name);
-            for (i=0; i<f->numArgs; i++) {
-                if (level == 0) {
-                    printf(" ..");
-                } else {
-                    print_node(node->func_eval.args[i], env, level-1);
-                }
-            }
-            printf (")");
-            return;
-        default:
-            fprintf(stderr, "Unexpected node type during evaluation.\n");
-            exit(1);
-    }
-}
-
 struct BUILTIN_DECL * find_builtin(char *name)
 {
     int i;
@@ -629,67 +576,7 @@ int eval(struct TREE_NODE * node, int *env)
 /*********************************************************
  * Begin of supporting code for the built-in functions.  *
  *********************************************************/
-/*
-int eval_inc(struct TREE_NODE * node, int *env)
-{
-    return eval(node->builtin_func.args[0], env) + 1;
-}
 
-void print_inc(FILE *stream, struct TREE_NODE * node, int *env, int level)
-{
-	fprintf (stream, " (inc ..)");
-}
-            
-int eval_dec(struct TREE_NODE * node, int *env)
-{
-    int v = eval(node->builtin_func.args[0], env) - 1;
-	if (v < 0) {
-	    fprintf(stderr, "Encountering a negative number.  Exiting.\n");
-		exit(1);
-	}
-	return v;
-}
-
-void print_dec(FILE *stream, struct TREE_NODE * node, int *env, int level)
-{
-	fprintf (stream, " (dec ..)");
-}
-
-int eval_ifz(struct TREE_NODE * node, int *env)
-{
-    int i;
-    int v = eval(node->builtin_func.args[0], env);
-            
-    if (tracing) {
-        for (i=0; i<depth; i++) {
-            printf (" ");
-        }
-        printf("Evaluating (ifz %d", v);
-        print_node(node->builtin_func.args[1], env, 2);
-        print_node(node->builtin_func.args[2], env, 2);
-        printf(")\n");
-    }
-
-    if (v == 0) 
-        v = eval(node->builtin_func.args[1], env);
-    else
-        v = eval(node->builtin_func.args[2], env);
-    return v;
-}
-
-void print_ifz(FILE *stream, struct TREE_NODE * node, int *env, int level)
-{
-    if (level == 0) {
-        printf (" (ifz .. .. ..)");
-    } else {
-        printf (" (ifz");
-        print_node(node->builtin_func.args[0], env, level-1);
-        print_node(node->builtin_func.args[1], env, level-1);
-        print_node(node->builtin_func.args[2], env, level-1);
-        printf (")");
-    }
-}
-*/
 /*********************************************************
  * End of supporting code for the built-in functions.  *
  *********************************************************/
